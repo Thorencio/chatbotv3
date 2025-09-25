@@ -1,0 +1,109 @@
+
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>KIN508 · Chatbot de Razonamiento Clínico</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <header class="container">
+    <h1>ARK · KIN508</h1>
+    <p class="subtitle">Asistente de razonamiento clínico para Disfunción Neuromusculoesquelética.</p>
+  </header>
+
+  <main class="container card">
+    <section id="env-warning" class="warning" style="display: none;">
+      <strong>Configura OPENAI_API_KEY</strong> en Vercel &rarr; Project &rarr; Settings &rarr; Environment Variables.
+    </section>
+
+    <section id="chat" class="chat">
+      <div id="messages" class="messages"></div>
+      <form id="chat-form" class="chat-form">
+        <textarea id="input" rows="3" placeholder="Describe tu caso clínico o haz una pregunta…"></textarea>
+        <div class="row">
+          <select id="model">
+            <option value="gpt-4o-mini">gpt-4o-mini</option>
+            <option value="gpt-4o">gpt-4o</option>
+            <option value="gpt-4.1-mini">gpt-4.1-mini</option>
+          </select>
+          <button type="submit">Enviar</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="helper">
+      <details>
+        <summary>Ejemplos de prompts</summary>
+        <ul>
+          <li>“Paciente con dolor anterior de rodilla al subir escaleras. ¿Qué hipótesis y tests propones?”</li>
+          <li>“Dame un esquema de anamnesis breve para dolor lumbar mecánico.”</li>
+          <li>“Enumera banderas rojas para columna cervical y decisiones de derivación.”</li>
+        </ul>
+      </details>
+    </section>
+  </main>
+
+  <footer class="container footer">
+    <small>PAIM · ARK · UDLA — Demo monolítica en Python desplegable en Vercel</small>
+  </footer>
+
+<script>
+const envOk = {{ 'true' if env_ok else 'false' }};
+document.getElementById('env-warning').style.display = envOk ? 'none' : 'block';
+
+const messagesEl = document.getElementById('messages');
+const form = document.getElementById('chat-form');
+const input = document.getElementById('input');
+const modelSel = document.getElementById('model');
+
+// Keep conversation in memory on the client and send with each request (stateless serverless)
+let history = [];
+
+function addMessage(role, content) {
+  const bubble = document.createElement('div');
+  bubble.className = 'bubble ' + role;
+  bubble.innerHTML = content.replace(/\n/g, '<br>');
+  messagesEl.appendChild(bubble);
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const userText = input.value.trim();
+  if (!userText) return;
+  addMessage('user', userText);
+  history.push({ role: 'user', content: userText });
+  input.value = '';
+
+  addMessage('assistant', '⏳ pensando…');
+
+  try {
+    const resp = await fetch('/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        messages: history,
+        model: modelSel.value,
+        temperature: 0.3,
+        course: 'KIN508'
+      })
+    });
+    if (!resp.ok) {
+      const detail = await resp.json().catch(() => ({}));
+      throw new Error(detail.detail || ('HTTP ' + resp.status));
+    }
+    const data = await resp.json();
+    // Replace the last assistant bubble with the real reply
+    const last = messagesEl.lastElementChild;
+    last.innerHTML = data.reply.replace(/\n/g, '<br>');
+    history.push({ role: 'assistant', content: data.reply });
+  } catch (err) {
+    const last = messagesEl.lastElementChild;
+    last.innerHTML = '❗ Error: ' + (err.message || err);
+  }
+});
+</script>
+</body>
+</html>
